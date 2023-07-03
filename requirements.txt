@@ -4,3 +4,5 @@ plotly
 pandas
 numpy
 altair
+requests
+io
