@@ -4,13 +4,18 @@ import pandas as pd
 import numpy as np
 import requests
 import io
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
 import plotly.graph_objects as go
 
 
-# Install requirements.txt with:
+# python3 -m venv venv
+
+# Linux/macOS: source venv/bin/activate
+# Windows: .\venv\Scripts\activate
+
 # pip install -r requirements.txt
 
 # Run with:
@@ -19,17 +24,44 @@ import plotly.graph_objects as go
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
-    print('Downloading titanic.csv...')
-    url = 'https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv'
-    download = requests.get(url).content
-    df = pd.read_csv(io.StringIO(download.decode('utf-8')))
-    # save df as .csv
-    df.to_csv('titanic2.csv')
+    """
+    Load the Titanic dataset.
+
+    The function checks if the dataset already exists in the local environment,
+    if it does, the function reads it directly. If the file doesn't exist, the function
+    downloads it from the Stanford University website and saves it as 'titanic.csv' in the
+    current working directory.
+
+    Returns:
+        pd.DataFrame: A pandas DataFrame containing the Titanic dataset.
+    """
+    if os.path.isfile('titanic.csv'):
+        print('Loading titanic.csv...')
+        df = pd.read_csv('titanic.csv')
+    else:
+        print('Downloading titanic.csv...')
+        url = 'https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv'
+        download = requests.get(url).content
+        df = pd.read_csv(io.StringIO(download.decode('utf-8')))
+        df.to_csv('titanic.csv')
     return df
 
 
 @st.cache_data
 def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocesses the input DataFrame for further analysis.
+
+    The function transforms the 'Sex' column from categorical to numerical values.
+    It then reduces the DataFrame to only include the columns 'Survived', 'Pclass', 'Sex', 'Age', and 'Fare'.
+    It finally drops rows with missing values in these columns.
+
+    Args:
+        df (pd.DataFrame): A DataFrame containing the Titanic dataset.
+
+    Returns:
+        pd.DataFrame: A preprocessed pandas DataFrame.
+    """
     le = LabelEncoder()
     df['Sex'] = le.fit_transform(df['Sex'])
     df = df[['Survived', 'Pclass', 'Sex', 'Age', 'Fare']]
@@ -37,10 +69,22 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-#@st.cache_data
+@st.cache_data
 def train_model(df: pd.DataFrame) -> LogisticRegression:
-    print("TRAINING")
-    X = df.drop('Survived', axis=1)
+    """
+    Trains a Logistic Regression model for survival prediction.
+
+    The function takes a preprocessed DataFrame, separates it into features (X) and target variable (y),
+    and performs a train-test split. The model is then trained using the training data.
+
+    Args:
+        df (pd.DataFrame): A preprocessed DataFrame containing the Titanic dataset.
+
+    Returns:
+        LogisticRegression: A LogisticRegression model trained on the input data.
+    """
+    print("Training...")
+    X = df[['Pclass', 'Sex', 'Age']]
     y = df['Survived']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     X_train = X_train.values
@@ -51,22 +95,29 @@ def train_model(df: pd.DataFrame) -> LogisticRegression:
 
 
 def predict_survival() -> None:
+    """
+    Provides an interactive interface for user input and predicts the survival probability.
+
+    The function allows a user to input 'Passenger Class', 'Gender', and 'Age' through interactive
+    widgets and uses these inputs to predict the probability of survival using the trained model.
+    The survival probability is then displayed as a number and a gauge chart.
+
+    Returns:
+        None. The function will output the results directly to the Streamlit interface.
+    """
     pclass = st.selectbox('Passenger Class', [1, 2, 3])
     sex = st.selectbox('Gender', ['male', 'female'])
     age = st.slider('Age', 0, 100, 25)
-    fare = st.slider('Fare', 0, 600, 100)
 
     le = LabelEncoder()
     sex = le.fit_transform([sex])[0]
 
-    # Changed from predict to predict_proba
-    prediction_proba = model.predict_proba(np.array([pclass, sex, age, fare]).reshape(1, -1))
+    prediction_proba = model.predict_proba(np.array([pclass, sex, age]).reshape(1, -1))
 
     if st.button('Predict'):
-        survival_proba = prediction_proba[0][1]  # Probability of survival (class 1)
+        survival_proba = prediction_proba[0][1]
         st.write('Survival Probability: ', survival_proba)
 
-        # Create a gauge chart
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=survival_proba,
